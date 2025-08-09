@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/server";
 import { NextRequest, NextResponse } from "next/server";
+import { inngest } from "@/lib/inngest/client";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -51,9 +52,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const {} = await inngest.send({
+    name: "newsletter.schedule",
+    data: {},
+  });
+
   return NextResponse.json({
     success: true,
     message: "Preferences saved and added to table",
-    }
-  )
+  });
 }
