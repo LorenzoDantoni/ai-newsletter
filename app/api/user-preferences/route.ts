@@ -54,11 +54,61 @@ export async function POST(request: NextRequest) {
 
   const {} = await inngest.send({
     name: "newsletter.schedule",
-    data: {},
+    data: {
+      categories,
+      email,
+    },
   });
 
   return NextResponse.json({
     success: true,
     message: "Preferences saved and added to table",
   });
+}
+
+export async function GET() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { error: "You must be logged in to save preferences" },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const { data: preferences, error } = await supabase
+      .from("user_preferences")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    if (error && error.code !== "PGRST116") {
+      // PGRST116 = no rows found
+      console.error("Error fetching preferences:", error);
+      return NextResponse.json(
+        { error: "Failed to fetch preferences" },
+        { status: 500 },
+      );
+    }
+
+    if (!preferences) {
+      return NextResponse.json(
+        { error: "No preferences found" },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json(preferences);
+  } catch (error) {
+    console.error("Error in user-preferences GET API:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
 }
