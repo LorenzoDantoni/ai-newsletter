@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { marked } from "marked";
 import { sendEmail } from "@/lib/email";
+import { createClient } from "@/lib/client";
 
 if (!process.env.OPENROUTER_API_KEY) {
   throw new Error(
@@ -17,9 +18,36 @@ const openRouter = new OpenAI({
 });
 
 export default inngest.createFunction(
-  { id: "newsletter/scheduled" },
+  {
+    id: "newsletter/scheduled",
+    cancelOn: [
+      {
+        event: "newsletter.schedule.deleted",
+        if: "async.data.userId == event.data.userId"
+      },
+    ],
+  },
   { event: "newsletter.schedule" },
   async ({ event, step, runId }) => {
+    const isUserActive = await step.run("check-user-status", async () => {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("user_preferences")
+        .select("is_active")
+        .eq("user_id", event.data.userId)
+        .single();
+
+      if (error) {
+        console.error("Error checking user status:", error);
+        return false;
+      }
+
+      return data?.is_active || false;
+    });
+
+    if (!isUserActive) {
+    }
+
     // const categories = ["technology", "business", "politics"];
     const categories = event.data.categories;
 
@@ -59,7 +87,7 @@ export default inngest.createFunction(
     ];
 
     const summary = await openRouter.chat.completions.create({
-      model: "openai/gpt-oss-20b:free",
+      model: "z-ai/glm-4.5-air:free",
       messages: messages,
     });
 
@@ -77,10 +105,56 @@ export default inngest.createFunction(
         event.data.email,
         event.data.categories.join(", "),
         allArticles.length,
-        htmlResult
+        htmlResult,
       );
     });
 
-    return {};
+    await step.run("schedule-next", async () => {
+      const now = new Date();
+      let nextScheduleTime: Date;
+
+      switch (event.data.frequency) {
+        case "daily":
+          nextScheduleTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+          break;
+        case "weekly":
+          nextScheduleTime = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+          break;
+        case "biweekly":
+          nextScheduleTime = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+          break;
+        default:
+          nextScheduleTime = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      }
+
+      nextScheduleTime.setHours(9, 0, 0, 0);
+
+      const {} = await inngest.send({
+        name: "newsletter.schedule",
+        data: {
+          userId: event.data.userId,
+          email: event.data.email,
+          categories: event.data.categories,
+          frequency: event.data.frequency,
+        },
+        ts: nextScheduleTime.getTime(),
+      });
+
+      console.log(
+        `Next newsletter scheduled for: ${nextScheduleTime.toISOString()}`,
+      );
+    });
+
+    const result = {
+      newsletter: newsletterContent,
+      articleCount: allArticles.length,
+      categories: event.data.categories,
+      emailSent: true,
+      nextScheduled: true,
+      success: true,
+      runId: runId,
+    };
+
+    return result;
   },
 );

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/app/contexts/AuthContext";
 
 interface UserPreferences {
   categories: string[];
@@ -16,6 +17,7 @@ const DashboardPage = () => {
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const { user } = useAuth();
 
   useEffect(() => {
     fetch("/api/user-preferences")
@@ -43,6 +45,45 @@ const DashboardPage = () => {
         setIsLoading(false);
       });
   }, [router]);
+
+  async function handleDeactivateNewsletter() {
+    if (!user) return;
+    try {
+      const response = await fetch("/api/user-preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: false }),
+      });
+
+      if (response.ok) {
+        setPreferences((prev) => (prev ? { ...prev, is_active: false } : null));
+        alert("Newsletter deactivated successfully");
+      }
+    } catch (error) {
+      console.error("Error deactivating newsletter:", error);
+      alert("Failed to deactivate newsletter");
+    }
+  }
+
+  async function handleActivateNewsletter() {
+    if (!user) return;
+
+    try {
+      const response = await fetch("/api/user-preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: true }),
+      });
+
+      if (response.ok) {
+        setPreferences((prev) => (prev ? { ...prev, is_active: true } : null));
+        alert("Newsletter activated successfully");
+      }
+    } catch (error) {
+      console.error("Error activating newsletter:", error);
+      alert("Failed to activate newsletter");
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4 sm:px-6 lg:px-8">
@@ -158,6 +199,52 @@ const DashboardPage = () => {
                 </svg>
                 Update Preferences
               </button>
+
+              {preferences && (
+                <>
+                  {preferences.is_active ? (
+                    <button
+                      onClick={handleDeactivateNewsletter}
+                      className="w-full flex items-center justify-center px-4 py-3 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 transition-colors"
+                    >
+                      <svg
+                        className="w-5 h-5 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728"
+                        />
+                      </svg>
+                      Pause Newsletter
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleActivateNewsletter}
+                      className="w-full flex items-center justify-center px-4 py-3 border border-green-300 text-sm font-medium rounded-md text-green-700 bg-green-50 hover:bg-green-100 transition-colors"
+                    >
+                      <svg
+                        className="w-5 h-5 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      Resume Newsletter
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
